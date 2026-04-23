@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Журнал оценок</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: Tahoma, Arial, sans-serif;
+    background: #eef2f7;
+    color: #1f2937;
+}
+
+.header {
+    background: linear-gradient(135deg, #355c7d, #4f7aa3);
+    color: white;
+    padding: 18px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.nav {
+    display: flex;
+    flex-wrap: wrap;
+    background: #ffffff;
+    border-bottom: 1px solid #d8dee8;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.nav button {
+    flex: 1 1 140px;
+    padding: 14px 10px;
+    border: none;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 600;
+    cursor: pointer;
+    border-right: 1px solid #e5e7eb;
+}
+
+.nav button:hover,
+.nav button.active-btn {
+    background: #dbe7f5;
+}
+
+.wrapper {
+    max-width: 1180px;
+    margin: 20px auto;
+    padding: 0 14px 24px;
+}
+
+.card {
+    background: #ffffff;
+    border: 1px solid #dbe1ea;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.tab { display: none; }
+.tab.active { display: block; }
+
+h2 {
+    margin-top: 0;
+    color: #1e3a5f;
+}
+
+h3 {
+    color: #24486d;
+    margin-top: 24px;
+    margin-bottom: 12px;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+input, select {
+    padding: 9px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    min-width: 140px;
+}
+
+.button {
+    padding: 9px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    background: #696969;
+    color: white;
+}
+
+.button.secondary { background: #008000; }
+.button.warn { background: #dc2626; }
+
+.table-wrap {
+    overflow-x: auto;
+    margin-top: 12px;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background: white;
+    margin-bottom: 18px;
+}
+
+th, td {
+    border: 1px solid #d7dde5;
+    padding: 8px;
+    text-align: center;
+}
+
+th {
+    background: #eaf1fb;
+}
+
+.info-box {
+    background: #f8fbff;
+    border-left: 4px solid #4f7aa3;
+    padding: 12px;
+    margin-bottom: 14px;
+}
+
+.list p { margin: 8px 0; }
+
+.about {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.about img {
+    width: 160px;
+    height: 190px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    background: #f3f4f6;
+}
+
+.small {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.chart-block {
+    background: #f8fbff;
+    border: 1px solid #dbe7f5;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 22px;
+}
+
+.chart-box {
+    position: relative;
+    width: 100%;
+    height: 380px;
+}
+
+.empty {
+    padding: 12px;
+    color: #64748b;
+}
+
+@media (max-width: 700px) {
+    .about { grid-template-columns: 1fr; }
+    .nav button { flex-basis: 48%; }
+    .chart-box { height: 320px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Журнал оценок</h1>
+</div>
+
+<div class="nav">
+    <button class="active-btn" onclick="openTab('load', this)">Загрузка</button>
+    <button onclick="openTab('edit', this)">Редактор</button>
+    <button onclick="openTab('statsTable', this)">Статистика (таблица)</button>
+    <button onclick="openTab('statsChart', this)">Статистика (график)</button>
+    <button onclick="openTab('help', this)">Помощь</button>
+    <button onclick="openTab('about', this)">О программе</button>
+</div>
+
+<div class="wrapper">
+    <div id="load" class="tab active">
+        <div class="card">
+            <h2>Загрузка файла</h2>
+            <div class="info-box">Поддерживаются форматы: CSV, TXT, XLSX.</div>
+            <div class="controls">
+                <input type="file" id="fileInput">
+            </div>
+            <div class="table-wrap">
+                <table id="dataTable"></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit" class="tab">
+        <div class="card">
+            <h2>Редактор журнала</h2>
+            <div class="controls">
+                <input type="text" id="name" placeholder="ФИО">
+                <input type="text" id="class" placeholder="Класс">
+                <input type="text" id="subject" placeholder="Предмет">
+                <input type="number" id="grade" placeholder="Оценка" min="2" max="5">
+                <button class="button" onclick="addRecord()">Добавить</button>
+                <button class="button secondary" onclick="saveFile()">Сохранить</button>
+            </div>
+            <div class="table-wrap">
+                <table id="editTable"></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="statsTable" class="tab">
+        <div class="card">
+            <h2>Статистика в табличном виде</h2>
+            <div id="statsOutput"></div>
+        </div>
+    </div>
+
+    <div id="statsChart" class="tab">
+        <div class="card">
+            <h2>Статистика в графическом виде</h2>
+            <div id="chartsContainer"></div>
+        </div>
+    </div>
+
+    <div id="help" class="tab">
+        <div class="card list">
+            <h2>Помощь</h2>
+            <p><b>Загрузка</b> - открытие файла с оценками в форматах CSV, TXT или XLSX.</p>
+            <p><b>Редактор</b> - добавление новых записей в журнал, удаление учеников и сохранение результата.</p>
+            <p><b>Статистика (таблица)</b> - просмотр статистики по каждому классу и предмету, а также по всем классам сразу.</p>
+            <p><b>Статистика (график)</b> - отдельные графики средней оценки по каждому классу и общий график по всем классам.</p>
+            <p><b>О программе</b> - сведения о разработчике и назначении программы.</p>
+        </div>
+    </div>
+
+    <div id="about" class="tab">
+        <div class="card about">
+            <img src="red.png" alt="Фото разработчика">
+            <div>
+                <h2>О программе</h2>
+                <p>Программа предназначена для ведения простого электронного журнала оценок.</p>
+                <p><b>Разработчик:</b> Чесноков Артём Александрович</p>
+                <p><b>Email:</b> chesnokova@mail.com</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let data = [];
+let chartInstances = [];
+
+function openTab(id, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active-btn'));
+    if (btn) btn.classList.add('active-btn');
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
+
+    if (ext === 'xlsx') {
+        reader.onload = function(ev) {
+            const workbook = XLSX.read(ev.target.result, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            parseXLSX(rows);
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        reader.onload = function(ev) {
+            parseCSV(ev.target.result);
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+});
+
+function parseXLSX(rows) {
+    data = [];
+    if (rows.length < 2) {
+        renderTable();
+        return;
+    }
+
+    const headers = rows[0].map(h => String(h || '').trim());
+    const lowerHeaders = headers.map(h => h.toLowerCase());
+
+    const nameIndex = lowerHeaders.findIndex(h => h.includes('имя'));
+    const surnameIndex = lowerHeaders.findIndex(h => h.includes('фам'));
+    const patronymicIndex = lowerHeaders.findIndex(h => h.includes('отч'));
+    const classIndex = lowerHeaders.findIndex(h => h.includes('класс'));
+    const fioIndex = lowerHeaders.findIndex(h => h.includes('фио'));
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        let fio = '';
+        if (fioIndex !== -1) {
+            fio = String(row[fioIndex] || '').trim();
+        } else {
+            fio = [
+                row[surnameIndex] || '',
+                row[nameIndex] || '',
+                row[patronymicIndex] || ''
+            ].join(' ').replace(/\s+/g, ' ').trim();
+        }
+
+        const className = classIndex !== -1 ? String(row[classIndex] || '').trim() : '';
+
+        let startSubjectIndex = classIndex !== -1 ? classIndex + 1 : 0;
+        if (fioIndex !== -1 && classIndex === -1) {
+            startSubjectIndex = fioIndex + 1;
+        }
+
+        for (let j = startSubjectIndex; j < headers.length; j++) {
+            if (j === fioIndex || j === classIndex || j === nameIndex || j === surnameIndex || j === patronymicIndex) continue;
+
+            const subject = String(headers[j] || '').trim();
+            const grade = Number(row[j]);
+
+            if (!fio || !subject || isNaN(grade)) continue;
+
+            data.push({
+                name: fio,
+                class: className,
+                subject: subject,
+                grade: grade
+            });
+        }
+    }
+
+    renderTable();
+}
+
+function parseCSV(text) {
+    data = [];
+    const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
+    if (rows.length === 0) {
+        renderTable();
+        return;
+    }
+
+    let delimiter = ',';
+    if (rows[0].includes(';')) delimiter = ';';
+    if (rows[0].includes('\t')) delimiter = '\t';
+
+    let startIndex = 0;
+    const firstRow = rows[0].split(delimiter).map(x => x.trim().toLowerCase());
+
+    if (
+        firstRow.includes('фио') ||
+        firstRow.includes('класс') ||
+        firstRow.includes('предмет') ||
+        firstRow.includes('оценка') ||
+        firstRow.includes('name') ||
+        firstRow.includes('class') ||
+        firstRow.includes('subject') ||
+        firstRow.includes('grade')
+    ) {
+        startIndex = 1;
+    }
+
+    for (let i = startIndex; i < rows.length; i++) {
+        const cols = rows[i].split(delimiter).map(x => x.trim());
+        if (cols.length < 4) continue;
+
+        const gradeValue = Number(cols[3]);
+        if (isNaN(gradeValue)) continue;
+
+        data.push({
+            name: cols[0],
+            class: cols[1],
+            subject: cols[2],
+            grade: gradeValue
+        });
+    }
+
+    renderTable();
+}
+
+function renderTable() {
+    let grouped = {};
+
+    data.forEach(d => {
+        const key = d.name + '||' + d.class;
+        if (!grouped[key]) {
+            grouped[key] = {
+                name: d.name,
+                class: d.class,
+                subjects: {}
+            };
+        }
+        grouped[key].subjects[d.subject] = d.grade;
+    });
+
+    let allSubjects = [];
+    data.forEach(d => {
+        if (!allSubjects.includes(d.subject)) allSubjects.push(d.subject);
+    });
+
+    allSubjects.sort((a, b) => a.localeCompare(b, 'ru'));
+
+    let htmlLoad = '<tr><th>ФИО</th><th>Класс</th>';
+    allSubjects.forEach(subject => htmlLoad += `<th>${escapeHtml(subject)}</th>`);
+    htmlLoad += '</tr>';
+
+    let htmlEdit = '<tr><th>ФИО</th><th>Класс</th>';
+    allSubjects.forEach(subject => htmlEdit += `<th>${escapeHtml(subject)}</th>`);
+    htmlEdit += '<th>Удаление</th></tr>';
+
+    Object.values(grouped)
+        .sort((a, b) => {
+            const classCompare = String(a.class).localeCompare(String(b.class), 'ru');
+            if (classCompare !== 0) return classCompare;
+            return String(a.name).localeCompare(String(b.name), 'ru');
+        })
+        .forEach(student => {
+            const encName = encodeURIComponent(student.name);
+            const encClass = encodeURIComponent(student.class);
+
+            htmlLoad += `<tr><td>${escapeHtml(student.name)}</td><td>${escapeHtml(student.class)}</td>`;
+            htmlEdit += `<tr><td>${escapeHtml(student.name)}</td><td>${escapeHtml(student.class)}</td>`;
+
+            allSubjects.forEach(subject => {
+                const value = student.subjects[subject] ?? '';
+                htmlLoad += `<td>${escapeHtml(value)}</td>`;
+                htmlEdit += `<td>${escapeHtml(value)}</td>`;
+            });
+
+            htmlLoad += '</tr>';
+            htmlEdit += `<td><button class="button warn" onclick="deleteStudent('${encName}', '${encClass}')">Удалить</button></td></tr>`;
+        });
+
+    document.getElementById('dataTable').innerHTML = htmlLoad;
+    document.getElementById('editTable').innerHTML = htmlEdit;
+
+    calcStats();
+}
+
+function addRecord() {
+    const name = document.getElementById('name').value.trim();
+    const className = document.getElementById('class').value.trim();
+    const subject = document.getElementById('subject').value.trim();
+    const grade = Number(document.getElementById('grade').value);
+
+    if (!name || !className || !subject || isNaN(grade)) {
+        alert('Заполните все поля корректно');
+        return;
+    }
+
+    if (grade < 2 || grade > 5) {
+        alert('Оценка должна быть от 2 до 5');
+        return;
+    }
+
+    data.push({ name, class: className, subject, grade });
+    renderTable();
+
+    document.getElementById('name').value = '';
+    document.getElementById('class').value = '';
+    document.getElementById('subject').value = '';
+    document.getElementById('grade').value = '';
+}
+
+function deleteStudent(encodedName, encodedClass) {
+    const name = decodeURIComponent(encodedName);
+    const className = decodeURIComponent(encodedClass);
+
+    if (!confirm(`Удалить ученика ${name} (${className}) из списка?`)) return;
+
+    data = data.filter(item => !(item.name === name && item.class === className));
+    renderTable();
+}
+
+function saveFile() {
+    let allSubjects = [];
+    data.forEach(d => {
+        if (!allSubjects.includes(d.subject)) allSubjects.push(d.subject);
+    });
+
+    allSubjects.sort((a, b) => a.localeCompare(b, 'ru'));
+
+    let grouped = {};
+    data.forEach(d => {
+        const key = d.name + '||' + d.class;
+        if (!grouped[key]) {
+            grouped[key] = {
+                name: d.name,
+                class: d.class,
+                subjects: {}
+            };
+        }
+        grouped[key].subjects[d.subject] = d.grade;
+    });
+
+    let sheetData = [];
+    sheetData.push(['ФИО', 'Класс', ...allSubjects]);
+
+    Object.values(grouped)
+        .sort((a, b) => {
+            const classCompare = String(a.class).localeCompare(String(b.class), 'ru');
+            if (classCompare !== 0) return classCompare;
+            return String(a.name).localeCompare(String(b.name), 'ru');
+        })
+        .forEach(student => {
+            let row = [student.name, student.class];
+            allSubjects.forEach(subject => {
+                row.push(student.subjects[subject] ?? '');
+            });
+            sheetData.push(row);
+        });
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Журнал');
+
+    XLSX.writeFile(wb, 'Журнал_оценок.xlsx');
+}
+
+function getStats(grades) {
+    const sorted = [...grades].sort((a, b) => a - b);
+    const count = sorted.length;
+
+    const average = count ? sorted.reduce((sum, g) => sum + g, 0) / count : 0;
+
+    let median = 0;
+    if (count > 0) {
+        const mid = Math.floor(count / 2);
+        median = count % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+    }
+
+    const gradeCounts = { 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    sorted.forEach(g => {
+        if (gradeCounts[g] !== undefined) {
+            gradeCounts[g]++;
+        }
+    });
+
+    const gradePercents = {
+        2: count ? ((gradeCounts[2] / count) * 100).toFixed(1) : '0.0',
+        3: count ? ((gradeCounts[3] / count) * 100).toFixed(1) : '0.0',
+        4: count ? ((gradeCounts[4] / count) * 100).toFixed(1) : '0.0',
+        5: count ? ((gradeCounts[5] / count) * 100).toFixed(1) : '0.0'
+    };
+
+    return {
+        average,
+        median,
+        count,
+        gradeCounts,
+        gradePercents
+    };
+}
+
+function calcStats() {
+    const classSubjectStats = {};
+    const subjectOverallStats = {};
+
+    data.forEach(d => {
+        const className = d.class || 'Без класса';
+        const subject = d.subject || 'Без предмета';
+        const grade = Number(d.grade);
+
+        if (isNaN(grade)) return;
+
+        if (!classSubjectStats[className]) {
+            classSubjectStats[className] = {};
+        }
+        if (!classSubjectStats[className][subject]) {
+            classSubjectStats[className][subject] = [];
+        }
+        classSubjectStats[className][subject].push(grade);
+
+        if (!subjectOverallStats[subject]) {
+            subjectOverallStats[subject] = [];
+        }
+        subjectOverallStats[subject].push(grade);
+    });
+
+    let html = '';
+
+    if (data.length === 0) {
+        document.getElementById('statsOutput').innerHTML = '<p class="empty">Нет данных для статистики.</p>';
+        drawChartsByClass({}, {});
+        return;
+    }
+
+    html += '<h3>Статистика по классам и предметам</h3>';
+
+    Object.keys(classSubjectStats)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .forEach(className => {
+            html += `<div class="info-box"><b>Класс: ${escapeHtml(className)}</b></div>`;
+            html += `
+                <div class="table-wrap">
+                    <table>
+                        <tr>
+                            <th>Предмет</th>
+                            <th>Средняя</th>
+                            <th>Медиана</th>
+                            <th>Количество оценок</th>
+                            <th>2</th>
+                            <th>3</th>
+                            <th>4</th>
+                            <th>5</th>
+                        </tr>
+            `;
+
+            Object.keys(classSubjectStats[className])
+                .sort((a, b) => a.localeCompare(b, 'ru'))
+                .forEach(subject => {
+                    const grades = classSubjectStats[className][subject];
+                    const stats = getStats(grades);
+
+                    html += `
+                        <tr>
+                            <td>${escapeHtml(subject)}</td>
+                            <td>${stats.average.toFixed(2)}</td>
+                            <td>${stats.median.toFixed(2)}</td>
+                            <td>${stats.count}</td>
+                            <td>${stats.gradeCounts[2]} (${stats.gradePercents[2]}%)</td>
+                            <td>${stats.gradeCounts[3]} (${stats.gradePercents[3]}%)</td>
+                            <td>${stats.gradeCounts[4]} (${stats.gradePercents[4]}%)</td>
+                            <td>${stats.gradeCounts[5]} (${stats.gradePercents[5]}%)</td>
+                        </tr>
+                    `;
+                });
+
+            html += '</table></div>';
+        });
+
+    html += '<h3>Статистика по всем ученикам по предметам</h3>';
+    html += `
+        <div class="table-wrap">
+            <table>
+                <tr>
+                    <th>Предмет</th>
+                    <th>Средняя</th>
+                    <th>Медиана</th>
+                    <th>Количество оценок</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                </tr>
+    `;
+
+    Object.keys(subjectOverallStats)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .forEach(subject => {
+            const grades = subjectOverallStats[subject];
+            const stats = getStats(grades);
+
+            html += `
+                <tr>
+                    <td>${escapeHtml(subject)}</td>
+                    <td>${stats.average.toFixed(2)}</td>
+                    <td>${stats.median.toFixed(2)}</td>
+                    <td>${stats.count}</td>
+                    <td>${stats.gradeCounts[2]} (${stats.gradePercents[2]}%)</td>
+                    <td>${stats.gradeCounts[3]} (${stats.gradePercents[3]}%)</td>
+                    <td>${stats.gradeCounts[4]} (${stats.gradePercents[4]}%)</td>
+                    <td>${stats.gradeCounts[5]} (${stats.gradePercents[5]}%)</td>
+                </tr>
+            `;
+        });
+
+    html += '</table></div>';
+
+    document.getElementById('statsOutput').innerHTML = html;
+
+    drawChartsByClass(classSubjectStats, subjectOverallStats);
+}
+
+function destroyCharts() {
+    chartInstances.forEach(chart => chart.destroy());
+    chartInstances = [];
+}
+
+function drawChartsByClass(classSubjectStats, subjectOverallStats) {
+    destroyCharts();
+
+    const container = document.getElementById('chartsContainer');
+    container.innerHTML = '';
+
+    if (Object.keys(subjectOverallStats).length === 0) {
+        container.innerHTML = '<p class="empty">Нет данных для построения графиков.</p>';
+        return;
+    }
+
+    const overallBlock = document.createElement('div');
+    overallBlock.className = 'chart-block';
+    overallBlock.innerHTML = `
+        <h3>Все классы</h3>
+        <div class="chart-box">
+            <canvas id="chart_overall"></canvas>
+        </div>
+    `;
+    container.appendChild(overallBlock);
+
+    const overallSubjects = Object.keys(subjectOverallStats).sort((a, b) => a.localeCompare(b, 'ru'));
+    const overallValues = overallSubjects.map(subject => {
+        const arr = subjectOverallStats[subject];
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+    });
+
+    const overallCtx = document.getElementById('chart_overall').getContext('2d');
+    const overallChart = new Chart(overallCtx, {
+        type: 'bar',
+        data: {
+            labels: overallSubjects,
+            datasets: [{
+                label: 'Средняя оценка',
+                data: overallValues,
+                backgroundColor: 'rgba(79, 122, 163, 0.65)',
+                borderColor: 'rgba(79, 122, 163, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 5
+                }
+            }
+        }
+    });
+    chartInstances.push(overallChart);
+
+    Object.keys(classSubjectStats)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .forEach((className, index) => {
+            const chartId = `chart_class_${index}`;
+
+            const block = document.createElement('div');
+            block.className = 'chart-block';
+            block.innerHTML = `
+                <h3>Класс: ${escapeHtml(className)}</h3>
+                <div class="chart-box">
+                    <canvas id="${chartId}"></canvas>
+                </div>
+            `;
+            container.appendChild(block);
+
+            const subjects = Object.keys(classSubjectStats[className]).sort((a, b) => a.localeCompare(b, 'ru'));
+            const averages = subjects.map(subject => {
+                const arr = classSubjectStats[className][subject];
+                return arr.reduce((a, b) => a + b, 0) / arr.length;
+            });
+
+            const ctx = document.getElementById(chartId).getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: subjects,
+                    datasets: [{
+                        label: 'Средняя оценка',
+                        data: averages,
+                        backgroundColor: 'rgba(79, 122, 163, 0.65)',
+                        borderColor: 'rgba(79, 122, 163, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5
+                        }
+                    }
+                }
+            });
+
+            chartInstances.push(chart);
+        });
+}
+</script>
+
+</body>
+</html>
